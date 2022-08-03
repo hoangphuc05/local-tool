@@ -1,15 +1,29 @@
 
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, ipcMain } = require('electron')
+const path = require('path');
+const fs = require('fs');
 
+async function executeFunctionAsync(func) {
+  return func();
+}
+
+function executeFunctionCallback(func, callback) {
+  callback(func());
+}
+
+// read all file in src/pages folder
+const pages = fs.readdirSync('./src/pages').filter(file => file.endsWith('.js'));
+console.log(pages);
 function createWindow () {
   // Create the browser window.
   const win = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1000,
+    height: 800,
     webPreferences: {
-      nodeIntegration: true
+      nodeIntegration: true,
+      preload: path.join(__dirname, "preload.js")
     }
-  })
+  });
 
   //load the index.html from a url
   win.loadURL('http://localhost:3000');
@@ -18,25 +32,23 @@ function createWindow () {
   win.webContents.openDevTools()
 }
 
-// const path = require('path')
-
-// function createWindow () {
-//   const win = new BrowserWindow({
-//     width: 800,
-//     height: 600,
-//     webPreferences: {
-//       preload: path.join(__dirname, 'preload.js')
-//     }
-//   })
-
-//   win.loadFile('src/index.html')
-// }
-
-
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  ipcMain.handle("main:executeAsync", executeFunctionAsync);
+  ipcMain.handle("main:executeCallback", executeFunctionCallback);
+
+  // register all ipc in pages
+  for (const page of pages) {
+
+    const pageObject = require(`./src/pages/${page}`);
+    if (pageObject.ipcName != undefined) {
+      ipcMain.handle(pageObject.ipcName, pageObject.mainFunction);
+    }
+  }
+  createWindow();
+})
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
